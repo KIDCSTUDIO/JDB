@@ -1,0 +1,1455 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes" />
+  <title>产前样复核检点表生成器</title>
+
+  <!-- ══ PWA ── -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#548235" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="检点表" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --panel: #ffffff;
+      --text: #1a1a1a;
+      --muted: #6b7280;
+      --line: #d1d5db;
+      --accent: #1a56db;
+      --green: #548235;
+      --brown: #6B3F1F;
+      --yellow: #FFF2CC;
+      --light-green: #D9EAD3;
+      --alt-green: #F2F7EF;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei UI", -apple-system, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      font-size: 15px;
+      line-height: 1.55;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      position: sticky;
+      top: 0; z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .topbar-title { font-size: 17px; font-weight: 700; }
+    .topbar-btns { display: flex; gap: 8px; }
+
+    /* ── Main ── */
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 12px 12px 80px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      margin-bottom: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      background: #fafafa;
+      border-bottom: 1px solid var(--line);
+      color: var(--brown);
+    }
+    .card-body { padding: 12px 14px; }
+
+    /* ── Fields ── */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    .field:last-child { margin-bottom: 0; }
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+    }
+    label .hint { font-weight: 400; font-size: 11px; color: var(--muted); }
+    input, textarea {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      font: inherit;
+      font-size: 14px;
+      background: #fff;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(26,86,219,0.1);
+    }
+    textarea { min-height: 100px; resize: vertical; font-family: inherit; }
+
+    /* ── Buttons ── */
+    button {
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .1s;
+      white-space: nowrap;
+    }
+    button:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-outline { background: #fff; color: var(--accent); border-color: var(--accent); }
+    .btn-ghost { background: #fff; color: var(--muted); border-color: var(--line); }
+    .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+
+    /* ── Editable Table ── */
+    .data-table-wrap {
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      min-width: 900px;
+    }
+    .data-table th, .data-table td {
+      border: 1px solid #ccc;
+      padding: 4px 5px;
+      text-align: center;
+      vertical-align: top;
+    }
+    .data-table th {
+      background: var(--green);
+      color: #fff;
+      font-weight: 700;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .data-table td input {
+      width: 100%;
+      min-width: 60px;
+      border: none;
+      padding: 4px 3px;
+      font-size: 12px;
+      font-family: inherit;
+      background: transparent;
+      border-radius: 3px;
+    }
+    .data-table td input:focus {
+      background: #fff;
+      outline: 2px solid var(--accent);
+    }
+    .data-table tr.even { background: var(--alt-green); }
+    .data-table tr.odd { background: #fff; }
+    .data-table .col-seq { width: 40px; }
+    .data-table .col-model { width: 100px; }
+    .data-table .col-part { width: 110px; }
+    .data-table .col-check { width: 180px; }
+    .data-table .col-standard { width: 220px; }
+    .data-table .col-method { width: 180px; }
+    .data-table .del-btn {
+      background: none; border: none; color: #c92a2a;
+      cursor: pointer; font-size: 16px; padding: 2px 6px;
+    }
+    .data-table td.gray-col { color: #999; font-size: 11px; }
+
+    .empty-hint {
+      text-align: center;
+      color: var(--muted);
+      padding: 20px;
+      font-size: 13px;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 999;
+      background: rgba(0,0,0,0.5);
+      padding: 16px; overflow-y: auto;
+    }
+    .modal-overlay.open { display: flex; align-items: flex-start; justify-content: center; }
+    .modal-box {
+      width: min(100%, 900px);
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+      margin: 16px 0;
+    }
+    .modal-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fafafa;
+      position: sticky; top: 0; z-index: 2;
+    }
+    .modal-bar h3 { font-size: 15px; }
+    .modal-close {
+      width: 32px; height: 32px;
+      border: none; background: #eee;
+      border-radius: 50%; font-size: 18px; line-height: 32px;
+      cursor: pointer;
+    }
+    .modal-content {
+      padding: 16px;
+      max-height: 70vh;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    /* Preview table styling - mimics Excel */
+    .preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9px;
+      font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    }
+    .preview-table td {
+      border: 1px solid #999;
+      padding: 3px 4px;
+      vertical-align: middle;
+    }
+    .pv-title {
+      background: var(--brown);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      height: 40px;
+    }
+    .pv-label { background: var(--light-green); font-weight: 700; text-align: center; font-size: 10px; }
+    .pv-desc { background: var(--yellow); color: #555; font-size: 9px; padding: 6px 8px; }
+    .pv-header { background: var(--green); color: #fff; font-weight: 700; text-align: center; font-size: 10px; }
+    .pv-data-even { background: var(--alt-green); }
+    .pv-data-center { text-align: center; }
+    .pv-data-left { text-align: left; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 1200;
+      padding: 10px 22px;
+      border-radius: 20px;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s;
+    }
+    .toast.show { opacity: 1; pointer-events: auto; }
+
+    /* ── Tutorial ── */
+    .tutorial-step { display: flex; gap: 12px; margin-bottom: 18px; }
+    .tutorial-num {
+      flex: 0 0 28px; height: 28px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; line-height: 1;
+      margin-top: 2px;
+    }
+    .tutorial-content { flex: 1; min-width: 0; }
+    .tutorial-content strong { font-size: 14px; color: var(--brown); display: block; margin-bottom: 4px; }
+    .tutorial-content p { font-size: 13px; color: #444; margin: 0 0 6px; line-height: 1.65; }
+    .code-block {
+      position: relative; background: #1e1e1e; border-radius: 8px;
+      padding: 12px 14px; margin: 8px 0; overflow: auto; max-height: 300px;
+    }
+    .code-block pre {
+      margin: 0; font-size: 12px; line-height: 1.5; color: #d4d4d4;
+      font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+      white-space: pre-wrap; word-break: break-all;
+    }
+    .copy-btn {
+      position: absolute; top: 6px; right: 8px;
+      font-size: 11px; padding: 3px 8px; border-radius: 4px;
+      border: 1px solid #555; background: #333; color: #ccc; cursor: pointer;
+    }
+    .copy-btn:hover { background: #444; color: #fff; }
+  </style>
+</head>
+<body>
+
+<!-- ════ TOP BAR ════ -->
+<div class="topbar">
+  <span class="topbar-title">📋 产前样复核检点表生成器</span>
+  <div class="topbar-btns">
+    <button class="btn-outline" onclick="showPreview()" style="padding:7px 13px;font-size:13px;">👁 预览</button>
+    <button class="btn-primary" onclick="downloadExcel()" style="padding:7px 13px;font-size:13px;">⬇ 下载 Excel</button>
+  </div>
+</div>
+
+<!-- ════ MAIN ════ -->
+<div class="wrap">
+
+  <!-- ── 项目名 ── -->
+  <div class="card">
+    <div class="card-header">项目信息</div>
+    <div class="card-body">
+      <div class="field" style="margin-bottom:0;">
+        <label>项目名 <span class="hint">（将作为文件名和款号列的内容）</span></label>
+        <input id="projectName" placeholder="例如：美独床尾凳">
+      </div>
+    </div>
+  </div>
+
+  <!-- ── API 设置 ── -->
+  <div class="card" id="apiSettingsCard">
+    <div class="card-header" style="cursor:pointer;" onclick="toggleApiSettings()">
+      ⚙️ API 设置 <span style="font-weight:400;font-size:12px;color:var(--muted);">— 配置 DeepSeek API（点此展开/收起）</span>
+    </div>
+    <div class="card-body" id="apiSettingsBody" style="display:none;">
+      <div class="field">
+        <label>Worker URL</label>
+        <input id="workerUrl" placeholder="https://xxx.workers.dev/parse">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>API Key</label>
+        <input id="apiKey" type="password" placeholder="sk-...">
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Cloudflare Worker 部署教程 ── -->
+  <div class="card" id="tutorialCard">
+    <div class="card-header" style="cursor:pointer;" onclick="toggleTutorial()">
+      📖 没有 Worker URL？<span style="font-weight:400;font-size:12px;color:var(--muted);"> — 手把手教你免费部署（点此展开/收起）</span>
+    </div>
+    <div class="card-body" id="tutorialBody" style="display:none;">
+      <div class="tutorial-step">
+        <div class="tutorial-num">1</div>
+        <div class="tutorial-content">
+          <strong>注册 Cloudflare 账号</strong>
+          <p>打开 <a href="https://dash.cloudflare.com/sign-up" target="_blank">cloudflare.com</a>，用邮箱注册（免费，不需要绑卡）。</p>
+        </div>
+      </div>
+      <div class="tutorial-step">
+        <div class="tutorial-num">2</div>
+        <div class="tutorial-content">
+          <strong>安装 Node.js</strong>
+          <p>打开 <a href="https://nodejs.org" target="_blank">nodejs.org</a>，下载左边的 LTS 版本，一路点「下一步」安装。装完后验证：Win+R 输入 <code>cmd</code> 回车，输入 <code>node -v</code> 看到版本号就是成功了。</p>
+        </div>
+      </div>
+      <div class="tutorial-step">
+        <div class="tutorial-num">3</div>
+        <div class="tutorial-content">
+          <strong>创建 Worker 项目</strong>
+          <p>在你想放代码的地方（比如桌面），打开 cmd，逐行执行：</p>
+          <div class="code-block"><button class="copy-btn" onclick="copyCode(this, 'step3')">📋 复制</button><pre id="step3">mkdir checklist-worker
+cd checklist-worker
+npm create cloudflare@latest -- --name checklist-parser -y
+cd checklist-parser</pre></div>
+          <p style="font-size:12px;color:var(--muted);margin-top:6px;">选 Hello World Worker / JavaScript 即可。提示登录时按回车，会自动打开浏览器授权。</p>
+        </div>
+      </div>
+      <div class="tutorial-step">
+        <div class="tutorial-num">4</div>
+        <div class="tutorial-content">
+          <strong>替换 Worker 代码</strong>
+          <p>用下面这段完整代码替换 <code>src/index.js</code> 的全部内容（文件在刚创建的 <code>checklist-parser/src/</code> 目录下，右键用记事本打开）：</p>
+          <div class="code-block"><button class="copy-btn" onclick="copyCode(this, 'workerCode')">📋 复制全部代码</button><pre id="workerCode">/**
+ * 产前样复核检点表 — AI 解析 Worker
+ * 代理 DeepSeek API，供前端 HTML 调用
+ */
+export default {
+  async fetch(request, env) {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders() });
+    }
+
+    const url = new URL(request.url);
+    if (url.pathname !== '/parse' || request.method !== 'POST') {
+      return new Response('Not Found', { status: 404, headers: corsHeaders() });
+    }
+
+    try {
+      const body = await request.json();
+      const { items: rawItems, project } = body;
+      if (!rawItems || !project) {
+        return Response.json({ error: '缺少参数' }, { status: 400, headers: corsHeaders() });
+      }
+
+      const apiKey = env.DEEPSEEK_API_KEY || request.headers.get('x-api-key') || '';
+      if (!apiKey) {
+        return Response.json({ error: '请在 HTML 中填写 API Key' }, { status: 401, headers: corsHeaders() });
+      }
+
+      const dsResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'deepseek-reasoner',
+          messages: [{ role: 'user', content: SYSTEM_PROMPT + '\n\n---\n\n请解析以下用户输入：\n项目名：' + project + '\n' + rawItems }],
+          max_tokens: 4096,
+        }),
+      });
+
+      if (!dsResponse.ok) {
+        const errText = await dsResponse.text();
+        return Response.json({ error: 'DeepSeek API 错误 (' + dsResponse.status + '): ' + errText.slice(0, 200) }, { status: 502, headers: corsHeaders() });
+      }
+
+      const dsData = await dsResponse.json();
+      const content = dsData.choices?.[0]?.message?.content || '';
+      let parsed;
+      try {
+        parsed = JSON.parse(content.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim());
+      } catch (e) {
+        return Response.json({ error: '解析 AI 返回失败', raw: content.slice(0, 500) }, { status: 500, headers: corsHeaders() });
+      }
+      if (!Array.isArray(parsed.items)) {
+        return Response.json({ error: 'AI 返回格式异常' }, { status: 500, headers: corsHeaders() });
+      }
+      return Response.json(parsed, { headers: corsHeaders() });
+    } catch (err) {
+      return Response.json({ error: 'Worker 内部错误: ' + err.message }, { status: 500, headers: corsHeaders() });
+    }
+  },
+};
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
+    'Content-Type': 'application/json',
+  };
+}
+
+const SYSTEM_PROMPT = `你是家具制造行业的品质工程师。用户会给你项目名称和口语化的检点项列表，请你将其解析为结构化的产前样复核检点表。
+
+## 输出格式（严格 JSON）
+{
+  "items": [
+    {
+      "part": "部位/配件（核心部件名）",
+      "check_item": "重点复核项目（描述要复核的核心要点）",
+      "standard": "判定标准（具体尺寸数据或合格状态描述）",
+      "method": "复核方法（卡尺/卷尺测量、目视检查、手检牢固度等）"
+    }
+  ]
+}
+
+## 解析规则
+### 部位/配件：提取文本中的核心家具部件名称
+### 重点复核项目：将口语化描述转为正式表述
+### 判定标准：有尺寸保留尺寸，外观类描述表面标准，无明确标准写"按确认版图纸及标准执行"
+### 复核方法：含尺寸→卡尺/卷尺测量；表面→目视检查手触；安装→模拟安装操作`;</pre></div>
+        </div>
+      </div>
+      <div class="tutorial-step">
+        <div class="tutorial-num">5</div>
+        <div class="tutorial-content">
+          <strong>部署上线</strong>
+          <p>在 cmd 中确保当前在项目目录下（<code>checklist-parser</code>），执行：</p>
+          <div class="code-block"><button class="copy-btn" onclick="copyCode(this, 'step5')">📋 复制</button><pre id="step5">npx wrangler deploy</pre></div>
+          <p>部署成功后，终端会显示一行绿色的 URL，类似 <code>https://checklist-parser.xxxx.workers.dev</code>，把它复制下来。</p>
+        </div>
+      </div>
+      <div class="tutorial-step">
+        <div class="tutorial-num">6</div>
+        <div class="tutorial-content">
+          <strong>填回工具</strong>
+          <p>把刚才复制的 URL 粘贴到上方「Worker URL」输入框（记得末尾带 <code>/parse</code>）。再去 <a href="https://platform.deepseek.com/api_keys" target="_blank">platform.deepseek.com</a> 创建一个 API Key，粘贴到「API Key」输入框。搞定 🎉</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 口语化输入 ── -->
+  <div class="card">
+    <div class="card-header">检点项输入 <span style="font-weight:400;font-size:12px;color:var(--muted);">— 粘贴口语化内容，选择解析方式</span></div>
+    <div class="card-body">
+      <div class="field">
+        <textarea id="rawInput" rows="5" placeholder="1、床腿开槽为25.5mm，内部立柱下降25mm
+2、床头横板十字榫开孔26mm
+3、表面处理包括死结和其他瑕疵"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button class="btn-primary" onclick="aiParse()" id="btnAiParse">🤖 AI 解析</button>
+        <button class="btn-ghost" onclick="parseAndRender()">🔍 规则解析（离线）</button>
+        <span id="parseStatus" style="font-size:12px;color:var(--muted);display:none;"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 可编辑表格 ── -->
+  <div class="card">
+    <div class="card-header">解析结果 <span style="font-weight:400;font-size:12px;color:var(--muted);">— 点击单元格直接编辑，G-K列留空待填</span></div>
+    <div class="card-body">
+      <div class="data-table-wrap">
+        <table class="data-table" id="editableTable">
+          <thead>
+            <tr>
+              <th class="col-seq">序号</th>
+              <th class="col-model">适用款号</th>
+              <th class="col-part">部位/配件</th>
+              <th class="col-check">重点复核项目</th>
+              <th class="col-standard">判定标准</th>
+              <th class="col-method">复核方法</th>
+              <th>复核结果</th>
+              <th>实测值/问题说明</th>
+              <th>整改责任人</th>
+              <th>完成日期</th>
+              <th>复核签名</th>
+              <th style="width:36px;"></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr><td colspan="12" class="empty-hint">请输入项目名和检点项，然后点击「解析」</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="action-row">
+        <button class="btn-outline" onclick="addRow()">+ 添加行</button>
+        <button class="btn-ghost" onclick="saveDraft()">💾 保存草稿</button>
+        <button class="btn-ghost" onclick="loadDraft()">📂 加载草稿</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════ PREVIEW MODAL ════ -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closePreview()">
+  <div class="modal-box">
+    <div class="modal-bar">
+      <h3>📄 Excel 预览</h3>
+      <button class="modal-close" onclick="closePreview()">✕</button>
+    </div>
+    <div class="modal-content" id="modalContent"></div>
+  </div>
+</div>
+
+<!-- ════ TOAST ════ -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════
+   DATA
+   ══════════════════════════════════════ */
+// items: [{part, check_item, standard, method}]
+
+/* ══════════════════════════════════════
+   HELPERS
+   ══════════════════════════════════════ */
+function val(id) { return (document.getElementById(id)?.value || '').trim(); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ══════════════════════════════════════
+   PARSING ENGINE
+   ══════════════════════════════════════ */
+
+// Split raw text into numbered items
+function splitItems(raw) {
+  // First split by newlines
+  const lines = raw.split(/\n/).filter(l => l.trim());
+  const items = [];
+  for (const line of lines) {
+    // Match numbered prefix: "1、" "2." "3）" "(1)" "1," etc.
+    // Must be at start of line (after optional whitespace)
+    const cleaned = line.replace(/^\s*\d+\s*[、，,\.)）\s:：]+/, '').trim();
+    if (cleaned.length > 1) items.push(cleaned);
+  }
+  // If no numbered lines found, treat each non-empty line as an item
+  if (items.length === 0) {
+    for (const line of lines) {
+      if (line.trim().length > 1) items.push(line.trim());
+    }
+  }
+  return items;
+}
+
+// Extract parts (部位/配件) keywords
+const PART_KEYWORDS = [
+  // 更具体的在前，避免短词误匹配
+  '床头横板', '床头腿底部', '凳腿底部', '凳腿底', '软垫固定扣', '固定扣',
+  '排骨条', '支撑脚', '支撑腿', '对孔位', '安装结构',
+  '床腿', '床头板', '床尾板', '床侧板', '床尾凳', '床板', '床屏', '床架',
+  '桌板', '桌腿', '桌面', '桌架', '抽屉', '拉手', '滑轨',
+  '凳腿', '凳面',
+  '面板', '侧板', '底板', '背板', '横板', '竖板', '隔板', '层板',
+  '螺丝', '孔位', '五金', '软垫',
+  '饰面', '表面处理', '表面', '涂层',
+  '包装', '外箱', '内衬', '标签',
+  '龙骨', '脚垫', '毛毡垫',
+  '榫头', '榫卯', '开槽', '圆榫',
+  '连接件', '紧固件', '配件',
+  '灯带', '遥控', '按钮', '电机', '推杆', '走线',
+];
+
+function extractPart(text) {
+  // Try to match known keywords (longest match first)
+  let best = '';
+  for (const kw of PART_KEYWORDS) {
+    if (text.includes(kw) && kw.length > best.length) {
+      best = kw;
+    }
+  }
+  if (best) return best;
+
+  // Fallback: look for common patterns
+  const m = text.match(/^(.{2,6}?)(?:的|包括|为|开槽|开孔|直径|尺寸|处理|安装|固定|适配|情况)/);
+  if (m) return m[1].trim();
+
+  // Try to match the project name as context
+  const proj = val('projectName');
+  if (proj) {
+    // Use project name's core component: e.g. "桌板" from input, use "桌板整体"
+    if (text.includes('安装')) return proj + '整体安装';
+    if (text.includes('适配') || text.includes('螺丝') || text.includes('对孔')) return proj + '连接件';
+    if (text.includes('表面') || text.includes('瑕疵') || text.includes('处理')) return proj + '表面';
+  }
+
+  return '待确认';
+}
+
+// Extract dimensions from text
+function extractDimensions(text) {
+  // Match explicit mm or implied dimensions (numbers with decimals after measurement keywords)
+  const dims = text.match(/\d+\.?\d*\s*mm/gi);
+  if (dims && dims.length > 0) {
+    return dims.map(d => d.replace(/\s+/g, '').toLowerCase()).join('，');
+  }
+  // Try implied dimensions near keywords like 开槽, 直径, 开孔, 为
+  const implied = text.match(/(?:为|开槽|开孔|直径|下降|约)\s*(\d+\.?\d+)/g);
+  if (implied) {
+    const vals = implied.map(m => m.replace(/[^\d.]+/g, '') + 'mm');
+    return vals.join('，');
+  }
+  return '';
+}
+
+// Check if text contains dimension info
+function hasDimensions(text) {
+  return /\d+\.?\d+/.test(text) && /(?:mm|开槽|开孔|直径|下降|为|尺寸|cm|厘米|毫米)/i.test(text);
+}
+
+// Infer check item description
+function buildCheckItem(part, text) {
+  const hasDim = hasDimensions(text);
+
+  if (hasDim) {
+    // Build a natural description from the raw text
+    let desc = text
+      .replace(/\d+\.?\d*\s*mm/gi, '')
+      .replace(/^为/, '')
+      .replace(/，/g, '、')
+      .replace(/、$/, '')
+      .trim();
+    // Summarize key actions
+    const actions = [];
+    if (desc.includes('开槽')) actions.push('开槽尺寸');
+    if (desc.includes('开孔')) actions.push('开孔尺寸');
+    if (desc.includes('下降')) actions.push('立柱下降');
+    if (desc.includes('直径') || desc.includes('圆榫')) actions.push('圆榫直径');
+    if (desc.includes('底部')) actions.push('底部规格');
+    if (desc.includes('十字榫')) actions.push('十字榫尺寸');
+
+    if (actions.length > 0) {
+      return '复核' + actions.join('、');
+    }
+    return '复核' + part + '尺寸规格';
+  }
+
+  if (text.includes('表面') || text.includes('瑕疵') || text.includes('死结') || text.includes('处理')) {
+    return '复核表面处理效果，包括死结及其他瑕疵';
+  }
+  if (text.includes('毛毡') || text.includes('毡垫')) {
+    return '复核' + part + '毛毡垫安装情况';
+  }
+  if (text.includes('固定扣') || text.includes('固定稳定性')) {
+    if (part.includes('固定扣')) return '复核' + part + '稳定性及安装方式';
+    return '复核软垫固定扣固定稳定性及安装方式';
+  }
+  if (text.includes('安装体验') || (text.includes('安装') && !text.includes('固定'))) {
+    if (part.includes('安装')) return '复核' + part + '体验及便利性';
+    return '复核' + part + '安装体验及便利性';
+  }
+  if (text.includes('适配') || text.includes('对孔') || text.includes('螺丝')) {
+    return '复核螺丝与对孔位的适配情况及对孔精准度';
+  }
+
+  return '复核' + part;
+}
+
+// Build standard from dimensions or quality description
+function buildStandard(part, text) {
+  if (hasDimensions(text)) {
+    // Preserve context from the raw text
+    let std = text
+      .replace(/(\d+\.?\d*)\s*mm/gi, '$1mm')
+      .replace(/，/g, '，')
+      .trim();
+    // Clean up sentence starters
+    std = std.replace(/^[^a-zA-Z一-龥]+/, '');
+    // If it starts with part name, keep as is
+    if (std.startsWith(part)) {
+      return std;
+    }
+    return std;
+  }
+
+  // Quality-based standards
+  if (text.includes('表面') || text.includes('瑕疵') || text.includes('死结')) {
+    return '表面处理平整光滑，无明显死结、裂纹、流挂、毛刺等瑕疵';
+  }
+  if (text.includes('毛毡') || text.includes('毡垫')) {
+    return part + '均安装毛毡垫，粘贴牢固，位置居中，无脱落';
+  }
+  if (text.includes('固定扣') || text.includes('固定稳定性')) {
+    return '固定扣安装牢固，无松动、无移位变形；安装方式按确认版图纸要求';
+  }
+  if (text.includes('安装体验') || (text.includes('安装') && !text.includes('固定'))) {
+    return '安装过程顺畅，部件配合良好，连接紧密，无需额外修整';
+  }
+  if (text.includes('对孔') || text.includes('螺丝') || text.includes('适配')) {
+    return '螺丝孔位精准对齐，螺丝拧入顺畅无偏斜、无滑丝，孔位间距与图纸一致';
+  }
+
+  return '按确认版图纸及标准执行';
+}
+
+// Infer method from item type
+function buildMethod(part, text) {
+  if (hasDimensions(text)) {
+    return '卡尺/卷尺测量';
+  }
+  if (text.includes('表面') || text.includes('瑕疵') || text.includes('死结') ||
+      text.includes('颜色') || text.includes('色差') || text.includes('外观') ||
+      text.includes('处理效果')) {
+    return '目视检查表面及边缘，手触光滑度';
+  }
+  if (text.includes('毛毡') || text.includes('毡垫')) {
+    return '目视并手检毛毡垫有无、位置及牢固度';
+  }
+  if (text.includes('固定扣') || text.includes('固定')) {
+    return '手检固定件牢固度；目视检查安装方式、位置是否与图纸一致';
+  }
+  if (text.includes('安装')) {
+    return '模拟安装操作，检查各连接件配合度及操作便利性';
+  }
+  if (text.includes('对孔') || text.includes('螺丝') || text.includes('孔位')) {
+    return '卡尺测量孔位间距及孔径，试装螺丝检查对孔精度';
+  }
+
+  return '目视检查，必要时进行测量和功能测试';
+}
+
+// Main parse function
+function parseItems(raw) {
+  const rawItems = splitItems(raw);
+  return rawItems.map(text => {
+    let part = extractPart(text);
+    return {
+      part: part,
+      check_item: buildCheckItem(part, text),
+      standard: buildStandard(part, text),
+      method: buildMethod(part, text)
+    };
+  });
+}
+
+/* ══════════════════════════════════════
+   TABLE RENDERING
+   ══════════════════════════════════════ */
+
+let currentItems = [];
+
+function readTableData() {
+  const rows = document.querySelectorAll('#tableBody tr[data-idx]');
+  const items = [];
+  rows.forEach(row => {
+    const idx = parseInt(row.dataset.idx);
+    items.push({
+      part: row.querySelector('.inp-part')?.value || '',
+      check_item: row.querySelector('.inp-check')?.value || '',
+      standard: row.querySelector('.inp-standard')?.value || '',
+      method: row.querySelector('.inp-method')?.value || ''
+    });
+  });
+  return items;
+}
+
+function renderTable(items) {
+  currentItems = items;
+  const tbody = document.getElementById('tableBody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="12" class="empty-hint">请输入项目名和检点项，然后点击「解析」</td></tr>';
+    return;
+  }
+
+  const projectName = val('projectName') || '（未填项目名）';
+  let html = '';
+  items.forEach((item, i) => {
+    const rowClass = (i + 1) % 2 === 0 ? 'even' : 'odd';
+    html += `<tr class="${rowClass}" data-idx="${i}">
+      <td style="text-align:center;font-weight:600;color:#666;">${i + 1}</td>
+      <td style="text-align:center;color:#6B3F1F;font-size:11px;">${esc(projectName)}</td>
+      <td><input class="inp-part" value="${esc(item.part)}"></td>
+      <td><input class="inp-check" value="${esc(item.check_item)}"></td>
+      <td><input class="inp-standard" value="${esc(item.standard)}"></td>
+      <td><input class="inp-method" value="${esc(item.method)}"></td>
+      <td class="gray-col">留空待填</td>
+      <td class="gray-col">留空待填</td>
+      <td class="gray-col">留空待填</td>
+      <td class="gray-col">留空待填</td>
+      <td class="gray-col">留空待填</td>
+      <td><button class="del-btn" onclick="deleteRow(${i})" title="删除">×</button></td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+}
+
+function deleteRow(idx) {
+  const items = readTableData();
+  items.splice(idx, 1);
+  renderTable(items);
+}
+
+function addRow() {
+  const items = readTableData();
+  items.push({ part: '', check_item: '', standard: '', method: '' });
+  renderTable(items);
+}
+
+function parseAndRender() {
+  const raw = val('rawInput');
+  if (!raw) {
+    showToast('请先输入检点项内容');
+    return;
+  }
+  const items = parseItems(raw);
+  renderTable(items);
+  showToast(`已解析 ${items.length} 条检点项，可点击单元格编辑修正`);
+  // Auto-save draft
+  saveDraftSilent();
+}
+
+/* ══════════════════════════════════════
+   PREVIEW
+   ══════════════════════════════════════ */
+function buildPreviewHTML() {
+  const items = readTableData();
+  const projectName = val('projectName') || '（未填项目名）';
+
+  let dataRows = '';
+  items.forEach((item, i) => {
+    const rc = (i + 1) % 2 === 0 ? 'pv-data-even' : '';
+    dataRows += `<tr>
+      <td class="pv-data-center">${i + 1}</td>
+      <td class="pv-data-center">${esc(projectName)}</td>
+      <td class="pv-data-center">${esc(item.part)}</td>
+      <td class="pv-data-left">${esc(item.check_item)}</td>
+      <td class="pv-data-left">${esc(item.standard)}</td>
+      <td class="pv-data-left">${esc(item.method)}</td>
+      <td class="pv-data-center" style="color:#999;">待填</td>
+      <td style="color:#999;">待填</td>
+      <td style="color:#999;">待填</td>
+      <td style="color:#999;">待填</td>
+      <td style="color:#999;">待填</td>
+    </tr>`;
+  });
+
+  return `
+<div style="overflow-x:auto;">
+<table class="preview-table">
+  <tr><td colspan="11" class="pv-title">${esc(projectName)} 产前样复核检点表</td></tr>
+
+  <tr>
+    <td class="pv-label" style="width:5%;">工厂</td>
+    <td class="pv-data-left" colspan="2"></td>
+    <td class="pv-label" style="width:5%;">产品</td>
+    <td class="pv-data-left" colspan="2"></td>
+    <td class="pv-label" style="width:7%;">复核日期</td>
+    <td class="pv-data-left" colspan="2"></td>
+    <td class="pv-label" style="width:7%;">复核人</td>
+    <td class="pv-data-left"></td>
+  </tr>
+  <tr>
+    <td class="pv-label">样品编号</td>
+    <td class="pv-data-left" colspan="2"></td>
+    <td class="pv-label">图纸版本</td>
+    <td class="pv-data-left" colspan="2"></td>
+    <td class="pv-label">结论</td>
+    <td class="pv-data-left" colspan="2"></td>
+    <td class="pv-label">批准人</td>
+    <td class="pv-data-left"></td>
+  </tr>
+  <tr>
+    <td colspan="11" class="pv-desc">
+      说明：尺寸单位为 mm；尺寸公差按确认版图纸执行。复核结果请选择"合格 / 不合格 / 待确认"，不合格项须填写问题说明、责任人及完成日期。
+    </td>
+  </tr>
+
+  <tr>
+    <td class="pv-header">序号</td>
+    <td class="pv-header">适用款号</td>
+    <td class="pv-header">部位/配件</td>
+    <td class="pv-header">重点复核项目</td>
+    <td class="pv-header">判定标准</td>
+    <td class="pv-header">复核方法</td>
+    <td class="pv-header">复核结果</td>
+    <td class="pv-header">实测值/问题说明</td>
+    <td class="pv-header">整改责任人</td>
+    <td class="pv-header">完成日期</td>
+    <td class="pv-header">复核签名</td>
+  </tr>
+  ${dataRows}
+</table>
+
+<p style="margin-top:16px;font-weight:700;font-size:14px;color:#6B3F1F;">Sheet 2：原始记录与追溯</p>
+<table class="preview-table" style="margin-top:6px;">
+  <tr><td colspan="4" style="text-align:center;font-size:16px;font-weight:700;">原始看样结论与检点项追溯</td></tr>
+  <tr>
+    <td style="text-align:center;font-weight:700;">源文件</td>
+    <td colspan="3"></td>
+  </tr>
+  <tr>
+    <td class="pv-header" style="width:8%;">序号</td>
+    <td class="pv-header" style="width:60%;">原始记录</td>
+    <td class="pv-header" style="width:18%;">对应检点表序号</td>
+    <td class="pv-header" style="width:14%;">备注</td>
+  </tr>
+  ${items.map((_, i) => `
+  <tr class="${(i+1)%2===0?'pv-data-even':''}">
+    <td class="pv-data-center">${i+1}</td>
+    <td></td>
+    <td class="pv-data-center">${i+1}</td>
+    <td></td>
+  </tr>`).join('')}
+</table>
+</div>`;
+}
+
+function showPreview() {
+  const items = readTableData();
+  if (!items.length) {
+    showToast('请先解析检点项');
+    return;
+  }
+  document.getElementById('modalContent').innerHTML = buildPreviewHTML();
+  document.getElementById('modalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closePreview() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+/* ══════════════════════════════════════
+   EXCEL DOWNLOAD (ExcelJS)
+   ══════════════════════════════════════ */
+async function downloadExcel() {
+  const items = readTableData();
+  const projectName = val('projectName') || '未命名';
+
+  if (!items.length) {
+    showToast('请先解析检点项');
+    return;
+  }
+
+  const workbook = new ExcelJS.Workbook();
+
+  // ====== Sheet 1 ======
+  const ws = workbook.addWorksheet('产前样复核检点表', {
+    views: [{ showGridLines: true }]
+  });
+
+  // 列宽
+  ws.columns = [
+    { width: 8.25 },   // A 序号
+    { width: 13.0 },   // B 适用款号
+    { width: 18.0 },   // C 部位/配件
+    { width: 24.0 },   // D 重点复核项目
+    { width: 34.0 },   // E 判定标准
+    { width: 30.0 },   // F 复核方法
+    { width: 12.0 },   // G 复核结果
+    { width: 26.0 },   // H 实测值
+    { width: 14.0 },   // I 整改责任人
+    { width: 13.0 },   // J 完成日期
+    { width: 14.0 },   // K 复核签名
+  ];
+
+  // 行高
+  ws.getRow(1).height = 34;
+  ws.getRow(2).height = 24;
+  ws.getRow(3).height = 24;
+  ws.getRow(4).height = 30;
+  ws.getRow(5).height = 32;
+
+  // 样式定义
+  const thinBorder = { style: 'thin' };
+  const allBorders = { top: thinBorder, left: thinBorder, bottom: thinBorder, right: thinBorder };
+
+  const centerWrap = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  const leftWrap = { horizontal: 'left', vertical: 'middle', wrapText: true };
+
+  const titleFont = { name: '微软雅黑', size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
+  const labelFont = { name: '微软雅黑', size: 10, bold: true };
+  const valueFont = { name: '微软雅黑', size: 10 };
+  const descFont = { name: '微软雅黑', size: 9, color: { argb: 'FF555555' } };
+  const headerFont = { name: '微软雅黑', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  const dataFont = { name: '微软雅黑', size: 9 };
+
+  const titleFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6B3F1F' } };
+  const labelFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAD3' } };
+  const descFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+  const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF548235' } };
+  const altFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F7EF' } };
+
+  // Row 1: Title
+  ws.mergeCells('A1:K1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = `${projectName} 产前样复核检点表`;
+  titleCell.font = titleFont;
+  titleCell.fill = titleFill;
+  titleCell.alignment = centerWrap;
+  titleCell.border = allBorders;
+  for (let c = 2; c <= 11; c++) ws.getCell(1, c).border = allBorders;
+
+  // Row 2: Info row 1
+  const labels1 = [['A', '工厂'], ['D', '产品'], ['G', '复核日期'], ['J', '复核人']];
+  labels1.forEach(([col, label]) => {
+    const c = col.charCodeAt(0) - 64;
+    const cell = ws.getCell(2, c);
+    cell.value = label;
+    cell.font = labelFont;
+    cell.fill = labelFill;
+    cell.alignment = centerWrap;
+    cell.border = allBorders;
+  });
+
+  ws.mergeCells('B2:C2');
+  ws.mergeCells('E2:F2');
+  ws.mergeCells('H2:I2');
+  for (let c = 1; c <= 11; c++) {
+    const cell = ws.getCell(2, c);
+    cell.border = allBorders;
+    if (!cell.value) cell.font = valueFont;
+  }
+
+  // Row 3: Info row 2
+  const labels2 = [['A', '样品编号'], ['D', '图纸版本'], ['G', '结论'], ['J', '批准人']];
+  labels2.forEach(([col, label]) => {
+    const c = col.charCodeAt(0) - 64;
+    const cell = ws.getCell(3, c);
+    cell.value = label;
+    cell.font = labelFont;
+    cell.fill = labelFill;
+    cell.alignment = centerWrap;
+    cell.border = allBorders;
+  });
+
+  ws.mergeCells('B3:C3');
+  ws.mergeCells('E3:F3');
+  ws.mergeCells('H3:I3');
+  for (let c = 1; c <= 11; c++) {
+    const cell = ws.getCell(3, c);
+    cell.border = allBorders;
+    if (!cell.value) cell.font = valueFont;
+  }
+
+  // Row 4: Description
+  ws.mergeCells('A4:K4');
+  const descCell = ws.getCell('A4');
+  descCell.value = '说明：尺寸单位为 mm；尺寸公差按确认版图纸执行。复核结果请选择"合格 / 不合格 / 待确认"，不合格项须填写问题说明、责任人及完成日期。';
+  descCell.font = descFont;
+  descCell.fill = descFill;
+  descCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  descCell.border = allBorders;
+  for (let c = 2; c <= 11; c++) ws.getCell(4, c).border = allBorders;
+
+  // Row 5: Headers
+  const headers = ['序号', '适用款号', '部位/配件', '重点复核项目', '判定标准', '复核方法',
+                   '复核结果', '实测值/问题说明', '整改责任人', '完成日期', '复核签名'];
+  headers.forEach((h, i) => {
+    const cell = ws.getCell(5, i + 1);
+    cell.value = h;
+    cell.font = headerFont;
+    cell.fill = headerFill;
+    cell.alignment = centerWrap;
+    cell.border = allBorders;
+  });
+
+  // Rows 6-N: Data
+  items.forEach((item, idx) => {
+    const row = 6 + idx;
+    ws.getRow(row).height = 58;
+    const fill = (idx + 1) % 2 === 0 ? altFill : null;
+
+    const cols = [
+      { val: idx + 1, align: centerWrap },
+      { val: projectName, align: centerWrap },
+      { val: item.part, align: centerWrap },
+      { val: item.check_item, align: leftWrap },
+      { val: item.standard, align: leftWrap },
+      { val: item.method, align: leftWrap },
+      { val: '', align: centerWrap },
+      { val: '', align: leftWrap },
+      { val: '', align: centerWrap },
+      { val: '', align: centerWrap },
+      { val: '', align: centerWrap },
+    ];
+
+    cols.forEach((col, ci) => {
+      const cell = ws.getCell(row, ci + 1);
+      cell.value = col.val;
+      cell.font = dataFont;
+      if (fill) cell.fill = fill;
+      cell.alignment = col.align;
+      cell.border = allBorders;
+    });
+  });
+
+  // ====== Sheet 2 ======
+  const ws2 = workbook.addWorksheet('原始记录与追溯');
+
+  ws2.columns = [
+    { width: 8.0 }, { width: 70.0 }, { width: 18.0 }, { width: 36.0 }
+  ];
+
+  ws2.getRow(1).height = 30;
+  ws2.getRow(2).height = 22;
+  ws2.getRow(3).height = 22;
+
+  const sheet2Font = { name: '微软雅黑', size: 10 };
+  const sheet2Bold = { name: '微软雅黑', size: 10, bold: true };
+
+  // Row 1: Title
+  ws2.mergeCells('A1:D1');
+  const s2Title = ws2.getCell('A1');
+  s2Title.value = '原始看样结论与检点项追溯';
+  s2Title.font = { name: '微软雅黑', size: 16, bold: true };
+  s2Title.alignment = centerWrap;
+  s2Title.border = allBorders;
+  for (let c = 2; c <= 4; c++) ws2.getCell(1, c).border = allBorders;
+
+  // Row 2: Source file
+  ws2.mergeCells('B2:D2');
+  ws2.getCell('A2').value = '源文件';
+  ws2.getCell('A2').font = sheet2Bold;
+  ws2.getCell('A2').alignment = centerWrap;
+  ws2.getCell('A2').border = allBorders;
+  ws2.getCell('B2').border = allBorders;
+  ws2.getCell('B2').font = sheet2Font;
+  for (let c = 3; c <= 4; c++) ws2.getCell(2, c).border = allBorders;
+
+  // Row 3: Headers
+  ['序号', '原始记录', '对应检点表序号', '备注'].forEach((h, i) => {
+    const cell = ws2.getCell(3, i + 1);
+    cell.value = h;
+    cell.font = sheet2Bold;
+    cell.alignment = centerWrap;
+    cell.border = allBorders;
+  });
+
+  // Rows 4-N: Data
+  items.forEach((_, idx) => {
+    const row = 4 + idx;
+    ws2.getRow(row).height = 22;
+    const font9 = { name: '微软雅黑', size: 9 };
+
+    ws2.getCell(row, 1).value = idx + 1;
+    ws2.getCell(row, 1).font = font9;
+    ws2.getCell(row, 1).alignment = centerWrap;
+    ws2.getCell(row, 1).border = allBorders;
+
+    ws2.getCell(row, 2).value = '';
+    ws2.getCell(row, 2).font = font9;
+    ws2.getCell(row, 2).border = allBorders;
+
+    ws2.getCell(row, 3).value = idx + 1;
+    ws2.getCell(row, 3).font = font9;
+    ws2.getCell(row, 3).alignment = centerWrap;
+    ws2.getCell(row, 3).border = allBorders;
+
+    ws2.getCell(row, 4).value = '';
+    ws2.getCell(row, 4).font = font9;
+    ws2.getCell(row, 4).border = allBorders;
+  });
+
+  // Download
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${projectName}_产前样复核检点表.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+  showToast('✅ Excel 已下载！');
+}
+
+/* ══════════════════════════════════════
+   API SETTINGS
+   ══════════════════════════════════════ */
+function toggleApiSettings() {
+  const body = document.getElementById('apiSettingsBody');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  saveApiSettings();
+}
+
+function saveApiSettings() {
+  try {
+    localStorage.setItem('checklist_api_settings_v2', JSON.stringify({
+      workerUrl: val('workerUrl'),
+      apiKey: val('apiKey')
+    }));
+  } catch (e) {}
+}
+
+function loadApiSettings() {
+  try {
+    const raw = localStorage.getItem('checklist_api_settings_v2');
+    if (raw) {
+      const s = JSON.parse(raw);
+      document.getElementById('workerUrl').value = s.workerUrl || '';
+      document.getElementById('apiKey').value = s.apiKey || '';
+    }
+  } catch (e) {}
+}
+
+/* ══════════════════════════════════════
+   DEEPSEEK AI PARSING
+   ══════════════════════════════════════ */
+async function aiParse() {
+  console.log('🤖 aiParse() called');
+  const raw = val('rawInput');
+  const project = val('projectName');
+  const workerUrl = val('workerUrl');
+  const apiKey = val('apiKey');
+  console.log('workerUrl:', workerUrl, 'apiKey length:', apiKey?.length || 0, 'raw length:', raw?.length || 0);
+
+  if (!raw) { console.log('❌ raw empty'); showToast('请先输入检点项内容'); return; }
+  if (!project) { console.log('❌ project empty'); showToast('请先填写项目名'); return; }
+  if (!workerUrl) { console.log('❌ workerUrl empty'); showToast('请先在 API 设置中填写 Worker URL'); expandApiSettings(); return; }
+  if (!apiKey) { console.log('❌ apiKey empty'); showToast('请先在 API 设置中填写 API Key'); expandApiSettings(); return; }
+
+  // Auto-append /parse if missing
+  const apiUrl = workerUrl.endsWith('/parse') ? workerUrl : workerUrl.replace(/\/$/, '') + '/parse';
+
+  // Save API settings
+  saveApiSettings();
+
+  // Show loading state
+  setParseLoading(true);
+  console.log('🚀 Sending fetch to:', apiUrl);
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify({ items: raw, project: project }),
+    });
+    console.log('📡 fetch response status:', response.status);
+
+    const data = await response.json();
+    console.log('📦 response data:', data);
+
+    if (!response.ok || data.error) {
+      showToast('❌ ' + (data.error || '请求失败'));
+      console.log('AI parse failed, falling back to rule-based');
+      parseAndRender();
+      return;
+    }
+
+    // Validate and render
+    if (data.items && data.items.length > 0) {
+      // Normalize fields
+      const items = data.items.map(it => ({
+        part: it.part || '',
+        check_item: it.check_item || '',
+        standard: it.standard || '',
+        method: it.method || ''
+      }));
+      renderTable(items);
+      showToast('✅ AI 解析完成，共 ' + items.length + ' 项，可点击单元格编辑');
+      saveDraftSilent();
+    } else {
+      showToast('⚠️ AI 未返回有效数据，已使用规则解析');
+      parseAndRender();
+    }
+  } catch (err) {
+    console.error('💥 fetch error:', err);
+    showToast('⚠️ 网络错误，已使用规则解析');
+    parseAndRender();
+  } finally {
+    setParseLoading(false);
+  }
+}
+
+function setParseLoading(loading) {
+  const btn = document.getElementById('btnAiParse');
+  const status = document.getElementById('parseStatus');
+  if (loading) {
+    btn.disabled = true;
+    btn.textContent = '⏳ 解析中...';
+    status.style.display = 'inline';
+    status.textContent = '正在调用 AI 解析...';
+  } else {
+    btn.disabled = false;
+    btn.textContent = '🤖 AI 解析';
+    status.style.display = 'none';
+  }
+}
+
+function expandApiSettings() {
+  const body = document.getElementById('apiSettingsBody');
+  body.style.display = 'block';
+}
+
+function toggleTutorial() {
+  const body = document.getElementById('tutorialBody');
+  body.style.display = body.style.display === 'none' ? 'block' : 'none';
+}
+
+function copyCode(btn, id) {
+  const code = document.getElementById(id).innerText;
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => { btn.textContent = '📋 复制'; }, 2000);
+  }).catch(() => {
+    // Fallback for older browsers
+    const ta = document.createElement('textarea');
+    ta.value = code; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => { btn.textContent = '📋 复制'; }, 2000);
+  });
+}
+
+/* ══════════════════════════════════════
+   SAVE / LOAD DRAFT
+   ══════════════════════════════════════ */
+function getDraftData() {
+  return {
+    projectName: val('projectName'),
+    rawInput: val('rawInput'),
+    items: readTableData()
+  };
+}
+
+function saveDraft() {
+  const data = getDraftData();
+  try {
+    localStorage.setItem('checklist_generator_draft_v2', JSON.stringify(data));
+    showToast('💾 草稿已保存');
+  } catch (e) {
+    showToast('❌ 保存失败');
+  }
+}
+
+function saveDraftSilent() {
+  try {
+    localStorage.setItem('checklist_generator_draft_v2', JSON.stringify(getDraftData()));
+  } catch (e) {}
+}
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem('checklist_generator_draft_v2');
+    if (!raw) { showToast('📭 没有已保存的草稿'); return; }
+    const d = JSON.parse(raw);
+    document.getElementById('projectName').value = d.projectName || '';
+    document.getElementById('rawInput').value = d.rawInput || '';
+    if (d.items && d.items.length) {
+      renderTable(d.items);
+    }
+    showToast('📂 草稿已加载');
+  } catch (e) {
+    showToast('❌ 加载失败');
+  }
+}
+
+/* ══════════════════════════════════════
+   TOAST
+   ══════════════════════════════════════ */
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+/* ══════════════════════════════════════
+   INIT
+   ══════════════════════════════════════ */
+// Auto-load draft & API settings
+(function() {
+  loadApiSettings();
+  try {
+    const raw = localStorage.getItem('checklist_generator_draft_v2');
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d.projectName) document.getElementById('projectName').value = d.projectName;
+      if (d.rawInput) document.getElementById('rawInput').value = d.rawInput;
+      if (d.items && d.items.length) renderTable(d.items);
+    }
+  } catch (e) {}
+})();
+</script>
+
+<!-- ══ PWA Service Worker 注册 ══ -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(function() {
+    // 已注册，离线可用
+  }).catch(function(e) {
+    console.log('SW 注册失败: ', e);
+  });
+}
+</script>
+</body>
+</html>
