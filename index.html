@@ -1221,42 +1221,34 @@ async function downloadExcel() {
 
   const isPWA = window.matchMedia('(display-mode: standalone)').matches;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const isAndroid = /Android/.test(navigator.userAgent);
 
-  // ── 策略 1：浏览器模式 → 系统分享面板（存文件/发微信/AirDrop）──
-  if (!isPWA && navigator.share && navigator.canShare) {
+  // ── 策略 1：所有模式先试系统分享面板（浏览器里最好用）──
+  if (navigator.share && navigator.canShare) {
     const file = new File([blob], filename, { type: mimeType });
     if (navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: filename });
-        showToast('✅ 已发送到分享面板');
         URL.revokeObjectURL(url);
-        return;
+        return; // 分享成功/取消都静默退出
       } catch (e) {
-        if (e.name === 'AbortError') { URL.revokeObjectURL(url); return; }
+        // 分享失败 → 继续走下载通道
       }
     }
   }
 
-  // ── 策略 2：PWA 桌面模式 → 跳到浏览器打开（PWA 里 share/blob 下载无 UI）──
-  if (isPWA) {
+  // ── 策略 2：iOS PWA → 跳到 Safari（PWA 里下载无 UI，Safari 有）──
+  if (isPWA && isIOS) {
     const w = window.open(url, '_blank');
     if (w) {
-      showToast(isIOS ? '📂 已在 Safari 中打开 → 点地址栏右侧「⬇」保存'
-                      : '📂 文件已打开 → 下载保存');
+      showToast('📂 已在 Safari 中打开 → 点地址栏 ⬇ 保存');
     } else {
-      // 弹窗被拦截 → 回退到传统下载 + 明确指引
-      const a = document.createElement('a');
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); a.remove();
-      showToast(isIOS ? '✅ 已保存 → 打开「文件」App → 下载 查看'
-                      : '✅ 已保存到下载文件夹');
+      showToast('⚠️ 弹窗被拦截，请用浏览器打开本页面');
     }
     setTimeout(() => URL.revokeObjectURL(url), 10000);
     return;
   }
 
-  // ── 策略 3：桌面端 → 传统下载 ──
+  // ── 策略 3：Android PWA / 桌面 / 所有其他场景 → 直接下载 ──
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
@@ -1265,10 +1257,11 @@ async function downloadExcel() {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 3000);
 
-  if (isIOS) {
-    showToast('✅ 已保存 → 打开「文件」App → 下载 查看');
-  } else if (isAndroid) {
-    showToast('✅ 已保存到「下载/Download」文件夹');
+  // Android 下载后会发系统通知，提示查看路径
+  if (isPWA && !isIOS) {
+    showToast('✅ 下载完成！→ 打开「文件管理」App → 下载 目录', 4000);
+  } else if (isIOS) {
+    showToast('✅ 已保存 → 打开「文件」App → 下载');
   } else {
     showToast('✅ Excel 已下载！（浏览器下载文件夹）');
   }
@@ -1463,12 +1456,12 @@ function loadDraft() {
 /* ══════════════════════════════════════
    TOAST
    ══════════════════════════════════════ */
-function showToast(msg) {
+function showToast(msg, duration) {
   const toast = document.getElementById('toast');
   toast.textContent = msg;
   toast.classList.add('show');
   clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toast.classList.remove('show'), 2200);
+  toast._timer = setTimeout(() => toast.classList.remove('show'), duration || 2200);
 }
 
 /* ══════════════════════════════════════
