@@ -1217,24 +1217,46 @@ async function downloadExcel() {
   const filename = `${projectName}_产前样复核检点表.xlsx`;
   const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   const blob = new Blob([buffer], { type: mimeType });
+  const url = URL.createObjectURL(blob);
 
-  // ── 移动端：优先用系统分享面板（能直接发微信 / 存文件 / AirDrop）──
-  if (navigator.share && navigator.canShare) {
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isAndroid = /Android/.test(navigator.userAgent);
+
+  // ── 策略 1：浏览器模式 → 系统分享面板（存文件/发微信/AirDrop）──
+  if (!isPWA && navigator.share && navigator.canShare) {
     const file = new File([blob], filename, { type: mimeType });
     if (navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: filename });
         showToast('✅ 已发送到分享面板');
+        URL.revokeObjectURL(url);
         return;
       } catch (e) {
-        // 用户取消分享 → fallback 到下载
-        if (e.name === 'AbortError') return;
+        if (e.name === 'AbortError') { URL.revokeObjectURL(url); return; }
       }
     }
   }
 
-  // ── 桌面端 / 不支持分享 API 的浏览器：传统下载 ──
-  const url = URL.createObjectURL(blob);
+  // ── 策略 2：PWA 桌面模式 → 跳到浏览器打开（PWA 里 share/blob 下载无 UI）──
+  if (isPWA) {
+    const w = window.open(url, '_blank');
+    if (w) {
+      showToast(isIOS ? '📂 已在 Safari 中打开 → 点地址栏右侧「⬇」保存'
+                      : '📂 文件已打开 → 下载保存');
+    } else {
+      // 弹窗被拦截 → 回退到传统下载 + 明确指引
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      showToast(isIOS ? '✅ 已保存 → 打开「文件」App → 下载 查看'
+                      : '✅ 已保存到下载文件夹');
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    return;
+  }
+
+  // ── 策略 3：桌面端 → 传统下载 ──
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
@@ -1243,11 +1265,9 @@ async function downloadExcel() {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 3000);
 
-  // 根据平台给出明确的位置提示
-  const ua = navigator.userAgent;
-  if (/iPad|iPhone|iPod/.test(ua)) {
+  if (isIOS) {
     showToast('✅ 已保存 → 打开「文件」App → 下载 查看');
-  } else if (/Android/.test(ua)) {
+  } else if (isAndroid) {
     showToast('✅ 已保存到「下载/Download」文件夹');
   } else {
     showToast('✅ Excel 已下载！（浏览器下载文件夹）');
