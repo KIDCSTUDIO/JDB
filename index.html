@@ -1214,16 +1214,44 @@ async function downloadExcel() {
 
   // Download
   const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const filename = `${projectName}_产前样复核检点表.xlsx`;
+  const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const blob = new Blob([buffer], { type: mimeType });
+
+  // ── 移动端：优先用系统分享面板（能直接发微信 / 存文件 / AirDrop）──
+  if (navigator.share && navigator.canShare) {
+    const file = new File([blob], filename, { type: mimeType });
+    if (navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: filename });
+        showToast('✅ 已发送到分享面板');
+        return;
+      } catch (e) {
+        // 用户取消分享 → fallback 到下载
+        if (e.name === 'AbortError') return;
+      }
+    }
+  }
+
+  // ── 桌面端 / 不支持分享 API 的浏览器：传统下载 ──
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${projectName}_产前样复核检点表.xlsx`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 3000);
-  showToast('✅ Excel 已下载！');
+
+  // 根据平台给出明确的位置提示
+  const ua = navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua)) {
+    showToast('✅ 已保存 → 打开「文件」App → 下载 查看');
+  } else if (/Android/.test(ua)) {
+    showToast('✅ 已保存到「下载/Download」文件夹');
+  } else {
+    showToast('✅ Excel 已下载！（浏览器下载文件夹）');
+  }
 }
 
 /* ══════════════════════════════════════
